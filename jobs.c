@@ -33,11 +33,11 @@ static void sigchld_handler(int sig) {
   while (true) {
     pid = waitpid(-1, &status, WCONTINUED | WUNTRACED | WNOHANG);
     if (pid == 0)
-      break; //children exists, but its state has not change
+      break; // children exists, but its state has not change
     if (pid < 0 && errno == ECHILD)
-      break; // there are no child processes
-    for (int j = 0; j < njobmax; j++) { /* we are searching for specific proces in our structures,
-    so we have to iterate over it */
+      break;                            // there are no child processes
+    for (int j = 0; j < njobmax; j++) { /* we are searching for specific proces
+    in our structures, so we have to iterate over it */
       cur_job = &jobs[j];
       if (!cur_job->pgid)
         continue;
@@ -227,7 +227,7 @@ bool killjob(int j) {
   /* TODO: I love the smell of napalm in the morning. */
 #ifdef STUDENT
   if (jobs[j].pgid == 0)
-      return false;
+    return false;
   Kill(-jobs[j].pgid, SIGTERM);
   Kill(-jobs[j].pgid, SIGCONT);
 #endif /* !STUDENT */
@@ -243,7 +243,7 @@ void watchjobs(int which) {
 
       /* TODO: Report job number, state, command and exit code or signal. */
 #ifdef STUDENT
-    #define KILLED 3
+#define KILLED 3
     const char *state2status[] = {"exited", "running", "suspended", "killed"};
     sigset_t mask;
     int status;
@@ -279,9 +279,9 @@ int monitorjob(sigset_t *mask) {
 #ifdef STUDENT
   job_t *job = &jobs[FG];
 
-  while(true){
+  while (true) {
     Sigsuspend(mask);
-    if(jobstate(FG, &exitcode) != RUNNING){
+    if (jobstate(FG, &exitcode) != RUNNING) {
       break;
     }
   }
@@ -293,7 +293,7 @@ int monitorjob(sigset_t *mask) {
     Tcgetattr(tty_fd, &job->tmodes); // saved stopped state
   }
 
-  Tcsetattr(tty_fd, TCSADRAIN, &shell_tmodes); //restored shells terminal state
+  Tcsetattr(tty_fd, TCSADRAIN, &shell_tmodes); // restored shells terminal state
   setfgpgrp(getpid());
 #endif /* !STUDENT */
 
@@ -335,13 +335,13 @@ void shutdownjobs(void) {
 
   /* TODO: Kill remaining jobs and wait for them to finish. */
 #ifdef STUDENT
-for(int j = 0 ; j < njobmax; j++){
+  for (int j = 0; j < njobmax; j++) {
     if (!jobs[j].pgid) {
       continue;
     }
     killjob(j);
-    Sigsuspend(&mask); 
-}
+    Sigsuspend(&mask);
+  }
 #endif /* !STUDENT */
 
   watchjobs(FINISHED);
