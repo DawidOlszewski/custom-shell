@@ -113,11 +113,21 @@ noreturn void external_command(char **argv) {
   if (!index(argv[0], '/') && path) {
     /* TODO: For all paths in PATH construct an absolute path and execve it. */
 #ifdef STUDENT
+	char* PATH = strdup(path); // used to strtok
+	char* pathi = strtok(PATH, ":");
+	while(pathi){
+    char* prg = strdup(pathi); // strapp would change PATH variable, so we have to create modifable duplicate
+    strapp(&prg, "/");
+    strapp(&prg, argv[0]);
+    execve(prg, argv, environ); // it will execve or return -1
+    free(prg);
+    pathi = strtok(NULL, ":");
+	} // free is not necessary
+  free(PATH);
 #endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);
   }
-
   msg("%s: %s\n", argv[0], strerror(errno));
   exit(EXIT_FAILURE);
 }

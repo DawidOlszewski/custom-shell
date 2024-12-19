@@ -31,8 +31,28 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
-    (void)mode;
-    (void)MaybeClose;
+    #define INPUT_OPT 0
+    #define OUTPUT_OPT 1
+    const mode_t open_modes[] = {[INPUT_OPT] = O_RDONLY, [OUTPUT_OPT] = O_WRONLY | O_TRUNC | O_CREAT};
+    const int open_flags[] = {[INPUT_OPT] = 0, [OUTPUT_OPT] = 0644};
+    // from context-free grammar we know that after first occurence of T_INPUT or T_OUTPUT no WORD will occur.
+    if(token[i] == T_INPUT || token[i] == T_OUTPUT){
+      if(token[i] == T_INPUT){
+        MaybeClose(inputp); /* we have to close previous pipe or previous redirection,
+          because we will not use it anymore */
+        *inputp = Open(token[i+1], open_modes[INPUT_OPT], open_flags[INPUT_OPT]);
+      }
+      if(token[i] == T_OUTPUT){
+        MaybeClose(outputp); // we have to close previous pipe or previous redirection
+        *outputp = Open(token[i+1], open_modes[OUTPUT_OPT], open_flags[OUTPUT_OPT]);
+      }
+
+      token[i] = T_NULL;
+      token[i+1] = T_NULL;
+      i++;
+    }else{
+      n++;
+    }
 #endif /* !STUDENT */
   }
 
@@ -58,6 +78,48 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   /* TODO: Start a subprocess, create a job and monitor it. */
 #ifdef STUDENT
+  pid_t newpid = Fork();
+  if(newpid == 0){ /* new job */
+    Setpgid(0,0);
+    if(bg == FG){
+      setfgpgrp(getpid());
+    }
+    Signal(SIGINT, SIG_DFL);
+    Signal(SIGCHLD, SIG_DFL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+
+   if (input != -1) {
+      Dup2(input, STDIN_FILENO);
+      MaybeClose(&input);
+    }
+    if (output != -1) {
+      Dup2(output, STDOUT_FILENO);
+      MaybeClose(&output);
+    }
+
+    external_command(token);
+
+  }else{ /* shell*/
+    setpgid(newpid, newpid); /* race condition can occure:
+     it is possible that new process will be finished by now.
+     We could try to check it by kill(newpid, 0) but another race could
+     happen, so still we couln't use Setpgid that would fail with error no matter what.
+     WE CANNOT CHANGE GROUP OF ZOMBIE */
+    if(bg == FG){
+      setfgpgrp(newpid);
+    }
+    MaybeClose(&input);
+    MaybeClose(&output);
+    int j = addjob(newpid, bg);
+    addproc(j, newpid, token);
+    if(bg){
+       watchjobs(RUNNING);
+    }else{
+      exitcode = monitorjob(&mask); 
+    }
+  }
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
@@ -76,6 +138,37 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   /* TODO: Start a subprocess and make sure it's moved to a process group. */
   pid_t pid = Fork();
 #ifdef STUDENT
+  if (pid) { /* shell */
+    if (pgid == 0)
+      pgid = pid;
+    setpgid(pid, pgid);
+    MaybeClose(&input);
+    MaybeClose(&output);
+  } else { /* new job */
+    if (pgid == 0) {
+      pgid = getpid();
+      if (bg == FG) {
+        setfgpgrp(getpid());
+      }
+    }
+    Setpgid(pid, pgid);
+
+    Signal(SIGINT, SIG_DFL);
+    Signal(SIGCHLD, SIG_DFL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+
+    if (input != -1) { 
+      Dup2(input, STDIN_FILENO);
+      MaybeClose(&input);
+    }
+    if (output != -1) {
+      Dup2(output, STDOUT_FILENO);
+      MaybeClose(&output);
+    }
+    external_command(token);
+  }
 #endif /* !STUDENT */
 
   return pid;
@@ -107,11 +200,61 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
-  (void)input;
-  (void)job;
-  (void)pid;
-  (void)pgid;
-  (void)do_stage;
+
+  
+  inline token_t* tokens_split(const token_t* tokenstart, token_t d, int* new_len, int* is_last){
+    *is_last = 0;
+    *new_len = 0;
+    token_t* iter = (token_t*)tokenstart;
+    while(*iter != T_NULL && *iter != d){
+      iter++;
+      (*new_len)++;
+    }
+    if(*iter == d){
+      *iter == T_NULL;
+    }else{
+      *is_last = 1;
+    }
+    
+    return (token_t *)tokenstart;
+  }
+
+  int is_last = 0;
+  int new_len = 0;
+  token_t d = T_PIPE;
+  token_t* stagei = tokens_split(token, d, &new_len, &is_last);
+
+  while(true){
+    if(is_last){ /* we have created one pipe more than we should 
+    and we have to close output before, we will fork(), 
+    so we close it now. It will happen just once at the last iteration. */
+      MaybeClose(&next_input);
+      MaybeClose(&output);
+    }
+    pid = do_stage(pgid, &mask, input, output, stagei, new_len, bg);
+    if (!pgid) { /* unfortuantely we cannot assign group to job before do_stage(), 
+    bacause we need proces_id of newly created proces which will be taken from do_stage(). */
+      pgid = pid;
+      job = addjob(pgid, bg);
+    }
+    addproc(job, pid, stagei);
+    
+    if(!is_last){
+      input = next_input;
+      mkpipe(&next_input, &output);
+      stagei = tokens_split(stagei+new_len+1, d, &new_len, &is_last);
+    }else{
+      break;
+    }
+  }
+
+  if (bg == FG) {
+    exitcode = monitorjob(&mask);
+  } else {
+    watchjobs(RUNNING);
+  }
+
+
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
