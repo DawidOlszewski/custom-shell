@@ -219,17 +219,17 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 }
 
 /* Kill the job by sending it a SIGTERM. */
-bool killjob(int job) {
-  if (job >= njobmax || jobs[job].state == FINISHED)
+bool killjob(int j) {
+  if (j >= njobmax || jobs[j].state == FINISHED)
     return false;
-  debug("[%d] killing '%s'\n", job, jobs[job].command);
+  debug("[%d] killing '%s'\n", j, jobs[j].command);
 
   /* TODO: I love the smell of napalm in the morning. */
 #ifdef STUDENT
-  if (jobs[job].pgid == 0)
+  if (jobs[j].pgid == 0)
       return false;
-  Kill(-jobs[job].pgid, SIGTERM);
-  Kill(-jobs[job].pgid, SIGCONT);
+  Kill(-jobs[j].pgid, SIGTERM);
+  Kill(-jobs[j].pgid, SIGCONT);
 #endif /* !STUDENT */
 
   return true;
