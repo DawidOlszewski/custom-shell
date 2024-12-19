@@ -281,7 +281,7 @@ int monitorjob(sigset_t *mask) {
 
   while (true) {
     Sigsuspend(mask);
-    if (jobstate(FG, &exitcode) != RUNNING) {
+    if ((state = jobstate(FG, &exitcode)) != RUNNING) {
       break;
     }
   }

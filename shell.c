@@ -38,14 +38,15 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
     const int open_flags[] = {[INPUT_OPT] = 0, [OUTPUT_OPT] = 0644};
     // from context-free grammar we know that after first occurence of T_INPUT
     // or T_OUTPUT no WORD will occur.
-    if (token[i] == T_INPUT || token[i] == T_OUTPUT) {
-      if (token[i] == T_INPUT) {
+    mode = token[i];
+    if (mode == T_INPUT || mode == T_OUTPUT) {
+      if (mode == T_INPUT) {
         MaybeClose(inputp); /* we have to close previous pipe or previous
           redirection, because we will not use it anymore */
         *inputp =
           Open(token[i + 1], open_modes[INPUT_OPT], open_flags[INPUT_OPT]);
       }
-      if (token[i] == T_OUTPUT) {
+      if (mode == T_OUTPUT) {
         MaybeClose(
           outputp); // we have to close previous pipe or previous redirection
         *outputp =
@@ -216,7 +217,7 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
       (*new_len)++;
     }
     if (*iter == d) {
-      *iter == T_NULL;
+      *iter = T_NULL;
     } else {
       *is_last = 1;
     }
