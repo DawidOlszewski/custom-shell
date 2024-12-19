@@ -128,6 +128,7 @@ noreturn void external_command(char **argv) {
   } else {
     (void)execve(argv[0], argv, environ);
   }
+  
   msg("%s: %s\n", argv[0], strerror(errno));
   exit(EXIT_FAILURE);
 }
