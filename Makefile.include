@@ -1,5 +1,5 @@
 CC = gcc -g
-CFLAGS = -Og -Wall -Werror -Wstrict-prototypes
+CFLAGS = -Og
 AS = as -g
 ASFLAGS = 
 CPPFLAGS = -Iinclude
